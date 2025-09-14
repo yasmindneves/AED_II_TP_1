@@ -3,12 +3,12 @@
 #include <string.h>
 #include <ctype.h>
 
-#define INIT_PRIME 101        // tamanho inicial (primo)
-#define LOAD_MAX 0.75         // fator de carga máximo
+#define INIT_PRIME 101       
+#define LOAD_MAX 0.75        
 #define DESC_MAX 60
 #define CODE_MAX 64
 
-// Estrutura da peça
+
 typedef struct {
     char codigo[CODE_MAX];
     char descricao[DESC_MAX + 1];
@@ -16,32 +16,29 @@ typedef struct {
     float preco;
 } Item;
 
-// Nó da lista encadeada
 typedef struct Node {
     Item item;
     struct Node* next;
 } Node;
 
-// Enum para escolher a função de hash
+
 typedef enum {
     HASH_DIVISAO = 0,
     HASH_MULTIPLICACAO = 1,
     HASH_DOBRA = 2
 } HashMethod;
 
-// Estrutura da tabela hash
+
 typedef struct {
     Node** buckets;
-    size_t m;                 // tamanho da tabela
-    size_t n;                 // número de itens
-    HashMethod method;        // método de hash atual
-    unsigned long long total_buscas; // total de buscas realizadas
-    unsigned long long total_comp;   // total de comparações nas buscas
+    size_t m;               
+    size_t n;                
+    HashMethod method;        
+    unsigned long long total_buscas; 
+    unsigned long long total_comp;  
 } HashTable;
 
-/* ======= Funções auxiliares ======= */
 
-// testa se um número é primo
 static int is_prime(size_t x) {
     if (x < 2) return 0;
     if (x % 2 == 0) return x == 2;
@@ -50,7 +47,6 @@ static int is_prime(size_t x) {
     return 1;
 }
 
-// próximo primo >= x
 static size_t next_prime(size_t x) {
     if (x <= 2) return 2;
     if (x % 2 == 0) x++;
@@ -58,14 +54,12 @@ static size_t next_prime(size_t x) {
     return x;
 }
 
-// remove \n/\r no final da string
 static void trim_newline(char* s) {
     if (!s) return;
     size_t len = strlen(s);
     if (len && (s[len-1] == '\n' || s[len-1] == '\r')) s[len-1] = '\0';
 }
 
-// lê uma linha com mensagem
 static void read_line(const char* prompt, char* buf, size_t cap) {
     if (prompt) printf("%s", prompt);
     if (fgets(buf, (int)cap, stdin) == NULL) {
@@ -75,7 +69,6 @@ static void read_line(const char* prompt, char* buf, size_t cap) {
     trim_newline(buf);
 }
 
-// compara strings ignorando maiúsculas/minúsculas
 static int str_case_equal(const char* a, const char* b) {
     while (*a && *b) {
         unsigned char ca = (unsigned char)*a++;
@@ -86,8 +79,6 @@ static int str_case_equal(const char* a, const char* b) {
     }
     return *a == '\0' && *b == '\0';
 }
-
-/* ======= Criação/liberação da tabela ======= */
 
 static HashTable* ht_create(size_t m, HashMethod h) {
     HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
@@ -109,7 +100,6 @@ static HashTable* ht_create(size_t m, HashMethod h) {
     return ht;
 }
 
-// libera memória da tabela
 static void ht_free(HashTable* ht) {
     if (!ht) return;
     for (size_t i = 0; i < ht->m; ++i) {
@@ -124,9 +114,6 @@ static void ht_free(HashTable* ht) {
     free(ht);
 }
 
-/* ======= Funções de hash ======= */
-
-// converte string em número (rolling hash)
 static unsigned long long str_key_polynomial(const char* s) {
     const unsigned long long B = 131ULL;
     unsigned long long h = 0ULL;
@@ -135,16 +122,14 @@ static unsigned long long str_key_polynomial(const char* s) {
     return h;
 }
 
-// Hash por divisão
 static size_t hash_divisao(size_t m, const char* codigo) {
     unsigned long long k = str_key_polynomial(codigo);
     return (size_t)(k % (unsigned long long)m);
 }
 
-// Hash por multiplicação
 static size_t hash_multiplicacao(size_t m, const char* codigo) {
     unsigned long long k = str_key_polynomial(codigo);
-    const long double A = 0.6180339887498948482L; // (√5 − 1)/2
+    const long double A = 0.6180339887498948482L; // (v5 - 1)/2
     long double frac = (k * A) - (unsigned long long)(k * A);
     if (frac < 0.0L) frac = -frac;
     size_t idx = (size_t)((long double)m * frac);
@@ -152,7 +137,6 @@ static size_t hash_multiplicacao(size_t m, const char* codigo) {
     return idx;
 }
 
-// Hash por dobra (folding)
 static size_t hash_dobra(size_t m, const char* codigo) {
     unsigned long long acc = 0ULL;
     size_t len = strlen(codigo);
@@ -165,7 +149,6 @@ static size_t hash_dobra(size_t m, const char* codigo) {
     return (size_t)(acc % (unsigned long long)m);
 }
 
-// retorna o índice conforme o método atual
 static size_t ht_index(const HashTable* ht, const char* codigo) {
     switch (ht->method) {
         case HASH_DIVISAO:        return hash_divisao(ht->m, codigo);
@@ -175,9 +158,6 @@ static size_t ht_index(const HashTable* ht, const char* codigo) {
     }
 }
 
-/* ======= Busca em bucket ======= */
-
-// procura um código na lista, contando comparações
 static Node* bucket_find(Node* head, const char* codigo, unsigned long long* comps) {
     Node* cur = head;
     while (cur) {
@@ -187,8 +167,6 @@ static Node* bucket_find(Node* head, const char* codigo, unsigned long long* com
     }
     return NULL;
 }
-
-/* ======= Rehash ======= */
 
 static void ht_rehash(HashTable* ht, size_t new_m) {
     Node** old_b = ht->buckets;
@@ -204,7 +182,6 @@ static void ht_rehash(HashTable* ht, size_t new_m) {
     ht->m = new_m;
     ht->n = 0;
 
-    // reinserir itens na nova tabela
     for (size_t i = 0; i < old_m; ++i) {
         Node* cur = old_b[i];
         while (cur) {
@@ -219,15 +196,11 @@ static void ht_rehash(HashTable* ht, size_t new_m) {
     free(old_b);
 }
 
-/* ======= Operações de tabela ======= */
-
-// fator de carga
 static double ht_load_factor(const HashTable* ht) {
     if (ht->m == 0) return 0.0;
     return (double)ht->n / (double)ht->m;
 }
 
-// inserir peça
 static int ht_insert(HashTable* ht, const Item* it) {
     size_t idx = ht_index(ht, it->codigo);
     if (bucket_find(ht->buckets[idx], it->codigo, NULL) != NULL)
@@ -248,7 +221,6 @@ static int ht_insert(HashTable* ht, const Item* it) {
     return 1;
 }
 
-// buscar peça
 static int ht_search(HashTable* ht, const char* codigo, Item* out) {
     size_t idx = ht_index(ht, codigo);
     unsigned long long comps = 0ULL;
@@ -260,7 +232,6 @@ static int ht_search(HashTable* ht, const char* codigo, Item* out) {
     return 1;
 }
 
-// remover peça
 static int ht_remove(HashTable* ht, const char* codigo) {
     size_t idx = ht_index(ht, codigo);
     Node* cur = ht->buckets[idx];
@@ -279,9 +250,7 @@ static int ht_remove(HashTable* ht, const char* codigo) {
     return 0;
 }
 
-/* ======= Estatísticas ======= */
 
-// calcula buckets usados e maior lista
 static void ht_stats(const HashTable* ht, size_t* used, size_t* maxlist) {
     size_t u = 0, ml = 0;
     for (size_t i = 0; i < ht->m; ++i) {
@@ -309,9 +278,7 @@ static const char* method_name(HashMethod h) {
 
 /* ======= CSV ======= */
 
-// parseia linha CSV em Item
 static int parse_csv_line(char* line, Item* it) {
-    // formato: codigo;descricao;qtde;preco
     const char* sep = ";\n\r";
     char* t1 = strtok(line, sep);
     if (!t1) return 0;
@@ -322,7 +289,6 @@ static int parse_csv_line(char* line, Item* it) {
     char* t4 = strtok(NULL, sep);
     if (!t4) return 0;
 
-    // copia para estrutura
     strncpy(it->codigo, t1, CODE_MAX - 1);
     it->codigo[CODE_MAX - 1] = '\0';
     strncpy(it->descricao, t2, DESC_MAX);
@@ -332,7 +298,6 @@ static int parse_csv_line(char* line, Item* it) {
     return 1;
 }
 
-// carrega CSV, ignorando cabeçalho
 static int ht_load_csv(HashTable* ht, const char* fname) {
     FILE* f = fopen(fname, "r");
     if (!f) {
@@ -363,7 +328,6 @@ static int ht_load_csv(HashTable* ht, const char* fname) {
     return count;
 }
 
-// salva tabela em CSV
 static int ht_save_csv(const HashTable* ht, const char* fname) {
     FILE* f = fopen(fname, "w");
     if (!f) {
@@ -383,8 +347,6 @@ static int ht_save_csv(const HashTable* ht, const char* fname) {
     return 1;
 }
 
-/* ======= Alternar método de hash ======= */
-
 static void ht_switch_method(HashTable* ht) {
     ht->method = (HashMethod)((((int)ht->method) + 1) % 3);
     size_t m_atual = ht->m;
@@ -393,7 +355,6 @@ static void ht_switch_method(HashTable* ht) {
     printf("Rehash automatico realizado. Tamanho da tabela: %zu.\n", ht->m);
 }
 
-/* ======= Menus ======= */
 
 static void menu_inserir(HashTable* ht) {
     Item it;
@@ -476,10 +437,7 @@ static void menu_salvar_csv(HashTable* ht) {
         printf("Tabela salva em %s\n", fname);
 }
 
-/* ======= Função principal ======= */
-
 int main(void) {
-    // cria a tabela com tamanho inicial 101 e hash por divisão
     HashTable* ht = ht_create(INIT_PRIME, HASH_DIVISAO);
 
     int opcao = 0;
